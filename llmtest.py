@@ -1,6 +1,6 @@
 import ollama
 
-def hello_world_agent(query):
+def prompt_agent(query):
     # Create a client
     client = ollama.Client()
     
@@ -11,5 +11,5 @@ def hello_world_agent(query):
 
 # Test the agent
 query = "Say Hello World!"
-result = hello_world_agent(query)
+result = prompt_agent(query)
 print(result)
