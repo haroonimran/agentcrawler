@@ -16,7 +16,9 @@ from typing import List
 load_dotenv()
 
 #llm = os.getenv('LLM_MODEL', 'gpt-4o-mini')
-model = OpenAIModel(model_name="deepseek-R1:7b",base_url='http://localhost:11434/v1')
+local_client = AsyncOpenAI(base_url='http://localhost:11434/v1',api_key = "na")
+
+model = OpenAIModel(model_name="deepseek-R1:7b",openai_client=local_client,base_url='http://localhost:11434/v1')
 
 logfire.configure(send_to_logfire='if-token-present')
 

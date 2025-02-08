@@ -37,8 +37,10 @@ load_dotenv()
 
 supabase = chromadb.PersistentClient(path="./chroma_data")
 
+local_client = AsyncOpenAI(base_url='http://localhost:11434/v1',api_key = "na")
 
-openai_client = OpenAIModel(model_name="deepseek-R1:7b",base_url='http://localhost:11434/v1')
+model = OpenAIModel(model_name="deepseek-R1:7b",openai_client=local_client,base_url='http://localhost:11434/v1')
+
 # Configure logfire to suppress warnings (optional)
 logfire.configure(send_to_logfire='never')
 
@@ -78,7 +80,7 @@ async def run_agent_with_streaming(user_input: str):
     # Prepare dependencies
     deps = PydanticAIDeps(
         supabase=supabase,
-        openai_client=openai_client
+        openai_client=local_client
     )
 
     # Run the agent in a stream
