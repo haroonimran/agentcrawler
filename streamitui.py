@@ -39,7 +39,7 @@ supabase = chromadb.PersistentClient(path="./chroma_data")
 
 local_client = AsyncOpenAI(base_url='http://localhost:11434/v1',api_key = "na")
 
-model = OpenAIModel(model_name="deepseek-R1:7b",openai_client=local_client,base_url='http://localhost:11434/v1')
+model = OpenAIModel(model_name="deepseek-R1:7b",openai_client=local_client)
 
 # Configure logfire to suppress warnings (optional)
 logfire.configure(send_to_logfire='never')
