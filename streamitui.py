@@ -2,12 +2,15 @@ from __future__ import annotations
 from typing import Literal, TypedDict
 import asyncio
 import os
+import chromadb
 
 import streamlit as st
 import json
 import logfire
-from supabase import Client
+#from supabase import Client
 from openai import AsyncOpenAI
+
+from pydantic_ai.models.openai import OpenAIModel
 
 # Import all the message part classes
 from pydantic_ai.messages import (
@@ -22,18 +25,20 @@ from pydantic_ai.messages import (
     RetryPromptPart,
     ModelMessagesTypeAdapter
 )
-from (test)pydanticAI_Agent import pydantic_ai_expert, PydanticAIDeps
+from pydantic_ai_expert import pydantic_ai_expert, PydanticAIDeps
 
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
 
-openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-supabase: Client = Client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_SERVICE_KEY")
-)
 
+#openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
+supabase = chromadb.PersistentClient(path="./chroma_data")
+
+
+openai_client = OpenAIModel(model_name="deepseek-R1:7b",base_url='http://localhost:11434/v1')
 # Configure logfire to suppress warnings (optional)
 logfire.configure(send_to_logfire='never')
 
