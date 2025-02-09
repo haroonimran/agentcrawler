@@ -85,5 +85,4 @@ def display_message_part(part):
             st.markdown(part.content)
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
-
+    asyncio.run(main())
