@@ -39,7 +39,7 @@ supabase = chromadb.PersistentClient(path="./chroma_data")
 
 local_client = AsyncOpenAI(base_url='http://localhost:11434/v1',api_key = "na")
 
-model = OpenAIModel(model_name="llama3.1",openai_client=local_client)
+model = OpenAIModel(model_name="llama3.1:latest",openai_client=local_client)
 
 # Configure logfire to suppress warnings (optional)
 logfire.configure(send_to_logfire='never')

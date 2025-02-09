@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 import chromadb
+import ollama
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from openai import AsyncOpenAI
@@ -19,7 +20,8 @@ load_dotenv()
 
 # Initialize OpenAI and Supabase clients
 openai_client = AsyncOpenAI(base_url="http://localhost:11434/v1", api_key="na")
-supabase = chromadb.PersistentClient(path="./chroma_data")
+client = chromadb.PersistentClient(path="./chroma_data")
+
 @dataclass
 class ProcessedChunk:
     url: str
@@ -96,7 +98,11 @@ async def get_title_and_summary(chunk: str, url: str) -> Dict[str, str]:
     except Exception as e:
         print(f"Error getting title and summary: {e}")
         return {"title": "Error processing title", "summary": "Error processing summary"}
+    
 
+
+
+''' commented out openai embedding 8-Feb-2025 (haroon imran):
 async def get_embedding(text: str) -> List[float]:
     """Get embedding vector from OpenAI."""
     try:
@@ -108,6 +114,19 @@ async def get_embedding(text: str) -> List[float]:
     except Exception as e:
         print(f"Error getting embedding: {e}")
         return [0] * 1536  # Return zero vector on error
+'''
+
+
+###;local embedding - added 8-Feb-2025 (haroon imran):
+async def get_embedding(text: str) -> List[float]:
+    try:
+        response = await ollama.embed(model="nomic-embed-text", input=text)
+        return response.data[0].embedding
+    except Exception as e:
+        print(f"Error getting embedding: {e}")
+        return [0] * 1536  # Return zero vector on error
+
+
 
 async def process_chunk(chunk: str, chunk_number: int, url: str) -> ProcessedChunk:
     """Process a single chunk of text."""
@@ -135,6 +154,7 @@ async def process_chunk(chunk: str, chunk_number: int, url: str) -> ProcessedChu
         embedding=embedding
     )
 
+''' commented out insertion into supabse. replaced with adding to a chroma collection (8-Feb-2025 Haroon Imran)
 async def insert_chunk(chunk: ProcessedChunk):
     """Insert a processed chunk into Supabase."""
     try:
@@ -151,6 +171,33 @@ async def insert_chunk(chunk: ProcessedChunk):
         result = supabase.table("site_pages").insert(data).execute()
         print(f"Inserted chunk {chunk.chunk_number} for {chunk.url}")
         return result
+    except Exception as e:
+        print(f"Error inserting chunk: {e}")
+        return None
+'''
+
+
+
+
+async def insert_chunk(chunk: ProcessedChunk):
+    try:
+        data = {
+            "url": chunk.url,
+            "chunk_number": chunk.chunk_number,
+            "title": chunk.title,
+            "summary": chunk.summary,
+            "content": chunk.content,
+            "metadata": chunk.metadata,
+            "embedding": chunk.embedding
+            }
+        collection = client.get_or_create_collection(name="my_collection")
+        documents=data
+        ids=[f"doc_{i}" for i in range(len(documents))]
+
+        collection.add(
+        documents=documents,
+        ids=ids
+        )
     except Exception as e:
         print(f"Error inserting chunk: {e}")
         return None
