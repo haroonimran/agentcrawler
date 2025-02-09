@@ -9,18 +9,16 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from dotenv import load_dotenv
-import chromadb
-import ollama
-
+from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from openai import AsyncOpenAI
 #from supabase import create_client, Client
-
+from chromadb import 
 load_dotenv()
 
-# Initialize OpenAI and Supabase clients
+# Initialize OpenAI and ChromaDB clients
 openai_client = AsyncOpenAI(base_url="http://localhost:11434/v1", api_key="na")
-client = chromadb.PersistentClient(path="./chroma_data")
+client: HttpClient = PersistentClient(path="./chroma_data")
 
 @dataclass
 class ProcessedChunk:
@@ -120,8 +118,13 @@ async def get_embedding(text: str) -> List[float]:
 ###;local embedding - added 8-Feb-2025 (haroon imran):
 async def get_embedding(text: str) -> List[float]:
     try:
-        response = await ollama.embed(model="nomic-embed-text", input=text)
-        return response.data[0].embedding
+        
+        response = OllamaEmbeddingFunction(
+        model_name="nomic-embed-text",
+        url="http://localhost:11434/api/embeddings"
+        )
+        embeddings = await asyncio.to_thread(response, text)
+        return embeddings
     except Exception as e:
         print(f"Error getting embedding: {e}")
         return [0] * 1536  # Return zero vector on error
@@ -142,7 +145,7 @@ async def process_chunk(chunk: str, chunk_number: int, url: str) -> ProcessedChu
         "chunk_size": len(chunk),
         "crawled_at": datetime.now(timezone.utc).isoformat(),
         "url_path": urlparse(url).path
-    }
+        }
     
     return ProcessedChunk(
         url=url,
@@ -152,7 +155,7 @@ async def process_chunk(chunk: str, chunk_number: int, url: str) -> ProcessedChu
         content=chunk,  # Store the original chunk content
         metadata=metadata,
         embedding=embedding
-    )
+        )
 
 ''' commented out insertion into supabse. replaced with adding to a chroma collection (8-Feb-2025 Haroon Imran)
 async def insert_chunk(chunk: ProcessedChunk):
@@ -191,13 +194,14 @@ async def insert_chunk(chunk: ProcessedChunk):
             "embedding": chunk.embedding
             }
         collection = client.get_or_create_collection(name="my_collection")
-        documents=data
-        ids=[f"doc_{i}" for i in range(len(documents))]
+        documents=chunk.content
+        ids=str(chunk.chunk_number)
 
-        collection.add(
+        result = collection.add(
         documents=documents,
         ids=ids
         )
+        return result
     except Exception as e:
         print(f"Error inserting chunk: {e}")
         return None
@@ -221,14 +225,14 @@ async def process_and_store_document(url: str, markdown: str):
     ]
     await asyncio.gather(*insert_tasks)
 
-async def crawl_parallel(urls: List[str], max_concurrent: int = 5):
+async def crawl_parallel(urls: List[str], max_concurrent: int = 10):
     """Crawl multiple URLs in parallel with a concurrency limit."""
     browser_config = BrowserConfig(
         headless=True,
         verbose=False,
         extra_args=["--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"],
     )
-    crawl_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
+    crawl_config = CrawlerRunConfig(page_timeout=60000, cache_mode=CacheMode.BYPASS)
 
     # Create the crawler instance
     crawler = AsyncWebCrawler(config=browser_config)

@@ -7,24 +7,25 @@ import asyncio
 import httpx
 import os
 
-from pydantic_ai import Agent, ModelRetry, RunContext
+from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from openai import AsyncOpenAI
-from supabase import Client
+#from supabase import Client
+from chromadb import ClientAPI
 from typing import List
 
 load_dotenv()
 
-#llm = os.getenv('LLM_MODEL', 'gpt-4o-mini')
+#llm = os.getenv('LLM_MODEL', 'deepseek-R1:7b')
 local_client = AsyncOpenAI(base_url='http://localhost:11434/v1',api_key = "na")
 
-model = OpenAIModel(model_name="llama3.1:latest",openai_client=local_client)
+model = OpenAIModel(model_name='llama3.1:latest',openai_client=local_client)
 
 logfire.configure(send_to_logfire='if-token-present')
 
 @dataclass
 class PydanticAIDeps:
-    supabase: Client
+    client: ClientAPI
     openai_client: AsyncOpenAI
 
 system_prompt = """
@@ -52,7 +53,7 @@ async def get_embedding(text: str, openai_client: AsyncOpenAI) -> List[float]:
     """Get embedding vector from OpenAI."""
     try:
         response = await openai_client.embeddings.create(
-            model="text-embedding-3-small",
+            model="nomic-embed-text:latest",
             input=text
         )
         return response.data[0].embedding
@@ -77,7 +78,7 @@ async def retrieve_relevant_documentation(ctx: RunContext[PydanticAIDeps], user_
         query_embedding = await get_embedding(user_query, ctx.deps.openai_client)
         
         # Query Supabase for relevant documents
-        result = ctx.deps.supabase.rpc(
+        result = ctx.deps.client.rpc(
             'match_site_pages',
             {
                 'query_embedding': query_embedding,
@@ -116,7 +117,7 @@ async def list_documentation_pages(ctx: RunContext[PydanticAIDeps]) -> List[str]
     """
     try:
         # Query Supabase for unique URLs where source is pydantic_ai_docs
-        result = ctx.deps.supabase.from_('site_pages') \
+        result = ctx.deps.client.from_('site_pages') \
             .select('url') \
             .eq('metadata->>source', 'pydantic_ai_docs') \
             .execute()
@@ -146,7 +147,7 @@ async def get_page_content(ctx: RunContext[PydanticAIDeps], url: str) -> str:
     """
     try:
         # Query Supabase for all chunks of this URL, ordered by chunk_number
-        result = ctx.deps.supabase.from_('site_pages') \
+        result = ctx.deps.client.from_('site_pages') \
             .select('title, content, chunk_number') \
             .eq('url', url) \
             .eq('metadata->>source', 'pydantic_ai_docs') \

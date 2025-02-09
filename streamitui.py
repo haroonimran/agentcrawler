@@ -1,13 +1,11 @@
 from __future__ import annotations
 from typing import Literal, TypedDict
 import asyncio
-import os
 import chromadb
-
 import streamlit as st
-import json
 import logfire
 #from supabase import Client
+from chromadb import Client
 from openai import AsyncOpenAI
 
 from pydantic_ai.models.openai import OpenAIModel
@@ -35,7 +33,7 @@ load_dotenv()
 #openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-supabase = chromadb.PersistentClient(path="./chroma_data")
+client = chromadb.PersistentClient(path="./chroma_data")
 
 local_client = AsyncOpenAI(base_url='http://localhost:11434/v1',api_key = "na")
 
@@ -79,7 +77,7 @@ async def run_agent_with_streaming(user_input: str):
     """
     # Prepare dependencies
     deps = PydanticAIDeps(
-        supabase=supabase,
+        client=client,
         openai_client=local_client
     )
 
