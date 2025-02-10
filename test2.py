@@ -2,16 +2,10 @@ from __future__ import annotations
 import asyncio
 import streamlit as st
 import httpx
+import json
 from typing import Literal, TypedDict
 import chromadb
 import logfire
-
-# (If you still need these imports for other reasons, keep them)
-# from chromadb import Client
-# from openai import AsyncOpenAI
-# from pydantic_ai.models.openai import OpenAIModel
-# from pydantic_ai.messages import (...)
-# from pydantic_ai_expert import pydantic_ai_expert, PydanticAIDeps
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -48,48 +42,60 @@ def display_message(chat_msg: ChatMessage):
 
 async def ollama_stream(prompt: str, model_name: str = "llama3.1:latest"):
     """
-    Call Ollama's /generate endpoint in streaming mode.
-    Yields partial text chunks as they arrive.
+    Call Ollama's /v1/completions endpoint with "stream": True.
+    Yields partial text tokens as they arrive.
     """
-    url = "http://localhost:11434/v1/completions" # default Ollama port & endpoint
+    url = "http://localhost:11434/v1/completions"
     payload = {
         "prompt": prompt,
         "model": model_name,
-        "stream": True, # to get chunked output
-        # "stop": ["###"], # example of a stop token if you want
-        # any other Ollama parameters you might need ...
+        "stream": True,  # ask Ollama to stream partial responses
     }
 
     async with httpx.AsyncClient() as client:
-        # POST to /generate with JSON
         async with client.stream("POST", url, json=payload) as response:
-            # Check if success
             response.raise_for_status()
 
-            # Ollama streams partial tokens line by line
             async for line in response.aiter_lines():
-                # Each line is typically a JSON object or partial chunk
-                # Ollama's output lines often look like:
-                # {"type":"token","data":"Hello"} 
-                # {"type":"done","data":""}
-                # ...
-                # We need to parse only when type=token to get the text
                 if not line.strip():
                     continue
+
+                # DEBUG: print raw line
+                print("RAW line:", repr(line))
+
+                # Ollama sends lines like:
+                #   data: {"id":"cmpl-...","object":"text_completion","choices":[{"text":"How"}]}
+                # or the final line: data: [DONE]
+                # So we remove the "data: " prefix.
+                if line.startswith("data:"):
+                    line = line[len("data:"):].strip()
+
+                # If it's the "[DONE]" line, we stop streaming
+                if line == "[DONE]":
+                    break
+
+                # Otherwise, parse the JSON
                 try:
-                    data = httpx.JsonDecodeError
-                    data = httpx._models.json.loads(line)
-                    if data.get("type") == "token":
-                        yield data["data"]
-                except Exception:
-                    # If parsing fails, skip this chunk
-                    pass
+                    data = json.loads(line)
+                except json.JSONDecodeError as e:
+                    print("JSON parse error:", e)
+                    print("Offending line:", line)
+                    continue
+
+                # The partial text typically appears in data["choices"][0]["text"]
+                choices = data.get("choices", [])
+                if not choices:
+                    continue
+
+                text_chunk = choices[0].get("text", "")
+                # yield this partial text
+                yield text_chunk
 
 async def main():
     st.title("Locally Hosted Ollama Chat")
-    st.write("Ask any question about pydantic-ai, or anything else—powered by Ollama locally.")
+    st.write("Ask any question and see partial streaming with Ollama locally.")
 
-    # Initialize chat history if not present
+    # Initialize chat history in session state
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -100,7 +106,7 @@ async def main():
     # A Chat input box
     user_input = st.chat_input("What do you want to ask?")
 
-    # If user types something, handle it
+    # If user typed something
     if user_input:
         # 1) Save user message
         st.session_state.messages.append({
@@ -112,18 +118,16 @@ async def main():
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        # 2) Now we want to stream the assistant's response from Ollama
-        # We'll display partial text as it arrives.
+        # 2) Stream the assistant's response
         partial_text = ""
-        message_placeholder = st.empty() # for partial tokens
+        message_placeholder = st.empty()  # for partial tokens
 
         with st.chat_message("assistant"):
-            # Stream tokens from Ollama
             async for chunk in ollama_stream(prompt=user_input, model_name="llama3.1:latest"):
                 partial_text += chunk
                 message_placeholder.markdown(partial_text)
 
-        # 3) Once done streaming, store the final assistant response
+        # 3) Once done, store the final assistant response
         st.session_state.messages.append({
             "role": "assistant",
             "timestamp": "",

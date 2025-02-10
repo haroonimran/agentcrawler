@@ -17,7 +17,7 @@ from typing import List
 load_dotenv()
 
 #llm = os.getenv('LLM_MODEL', 'deepseek-R1:7b')
-local_client = AsyncOpenAI(base_url='http://localhost:11434/v1',api_key = "na")
+local_client = AsyncOpenAI(base_url='http://localhost:11434/v1/completions',api_key = "na")
 
 model = OpenAIModel(model_name='llama3.1:latest',openai_client=local_client)
 
