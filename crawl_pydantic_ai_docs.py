@@ -13,12 +13,12 @@ from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from openai import AsyncOpenAI
 #from supabase import create_client, Client
-from chromadb import 
+from chromadb import PersistentClient, ClientAPI
 load_dotenv()
 
 # Initialize OpenAI and ChromaDB clients
 openai_client = AsyncOpenAI(base_url="http://localhost:11434/v1", api_key="na")
-client: HttpClient = PersistentClient(path="./chroma_data")
+client: ClientAPI = PersistentClient(path="./chroma_data")
 
 @dataclass
 class ProcessedChunk:
@@ -85,7 +85,7 @@ async def get_title_and_summary(chunk: str, url: str) -> Dict[str, str]:
     
     try:
         response = await openai_client.chat.completions.create(
-            model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            model="llama3.1:latest",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"URL: {url}\n\nContent:\n{chunk[:1000]}..."}  # Send first 1000 chars for context
@@ -225,14 +225,14 @@ async def process_and_store_document(url: str, markdown: str):
     ]
     await asyncio.gather(*insert_tasks)
 
-async def crawl_parallel(urls: List[str], max_concurrent: int = 10):
+async def crawl_parallel(urls: List[str], max_concurrent: int = 20):
     """Crawl multiple URLs in parallel with a concurrency limit."""
     browser_config = BrowserConfig(
         headless=True,
         verbose=False,
         extra_args=["--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"],
     )
-    crawl_config = CrawlerRunConfig(page_timeout=60000, cache_mode=CacheMode.BYPASS)
+    crawl_config = CrawlerRunConfig(page_timeout=1200000, cache_mode=CacheMode.BYPASS)
 
     # Create the crawler instance
     crawler = AsyncWebCrawler(config=browser_config)
@@ -262,7 +262,7 @@ async def crawl_parallel(urls: List[str], max_concurrent: int = 10):
 
 def get_pydantic_ai_docs_urls() -> List[str]:
     """Get URLs from Pydantic AI docs sitemap."""
-    sitemap_url = "https://ai.pydantic.dev/sitemap.xml"
+    sitemap_url = "https://socialbydhaba.com/page-sitemap.xml"
     try:
         response = requests.get(sitemap_url)
         response.raise_for_status()

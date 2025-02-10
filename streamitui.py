@@ -5,7 +5,6 @@ import chromadb
 import streamlit as st
 import logfire
 #from supabase import Client
-from chromadb import Client
 from openai import AsyncOpenAI
 
 from pydantic_ai.models.openai import OpenAIModel

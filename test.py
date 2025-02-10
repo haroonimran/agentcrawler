@@ -1,88 +1,147 @@
+from __future__ import annotations
+from typing import Literal, TypedDict
 import asyncio
 import chromadb
 import streamlit as st
+import logfire
+#from supabase import Client
 from openai import AsyncOpenAI
-from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai_expert import pydantic_ai_expert, PydanticAIDeps
-from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
 
-# Initialize clients and model
+from pydantic_ai.models.openai import OpenAIModel
+
+# Import all the message part classes
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    SystemPromptPart,
+    UserPromptPart,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+    RetryPromptPart,
+    ModelMessagesTypeAdapter
+)
+from pydantic_ai_expert import pydantic_ai_expert, PydanticAIDeps
+
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
+
+#openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
 client = chromadb.PersistentClient(path="./chroma_data")
-local_client = AsyncOpenAI(base_url='http://localhost:11434/v1', api_key="na")
-model = OpenAIModel(model_name="llama3.1:latest", openai_client=local_client)
+
+local_client = AsyncOpenAI(base_url='http://localhost:11434/v1',api_key = "na")
+
+model = OpenAIModel(model_name="llama3.1:latest",openai_client=local_client)
+
+# Configure logfire to suppress warnings (optional)
+logfire.configure(send_to_logfire='never')
+
+class ChatMessage(TypedDict):
+    """Format of messages sent to the browser/API."""
+
+    role: Literal['user', 'model']
+    timestamp: str
+    content: str
+
+
+def display_message_part(part):
+    """
+    Display a single part of a message in the Streamlit UI.
+    Customize how you display system prompts, user prompts,
+    tool calls, tool returns, etc.
+    """
+    # system-prompt
+    if part.part_kind == 'system-prompt':
+        with st.chat_message("system"):
+            st.markdown(f"**System**: {part.content}")
+    # user-prompt
+    elif part.part_kind == 'user-prompt':
+        with st.chat_message("user"):
+            st.markdown(part.content)
+    # text
+    elif part.part_kind == 'text':
+        with st.chat_message("assistant"):
+            st.markdown(part.content)          
+
 
 async def run_agent_with_streaming(user_input: str):
-    deps = PydanticAIDeps(client=client, openai_client=local_client)
-    message_placeholder = st.empty()
-    full_response = ""
+    """
+    Run the agent with streaming text for the user_input prompt,
+    while maintaining the entire conversation in `st.session_state.messages`.
+    """
+    # Prepare dependencies
+    deps = PydanticAIDeps(
+        client=client,
+        openai_client=local_client
+    )
 
-    try:
-        st.write("Starting stream...")
-        async with pydantic_ai_expert.run_stream(
-            user_input,
-            deps=deps,
-            message_history=st.session_state.messages[:-1],
-        ) as result:
-            st.write("Stream opened successfully.")
-            async for chunk in result.stream_text(delta=True):
-                full_response += chunk
-                message_placeholder.markdown(full_response + "▌")
-                st.write(f"Received chunk: {chunk}")  # Debug output
-                await asyncio.sleep(0.01)
+    # Run the agent in a stream
+    async with pydantic_ai_expert.run_stream(
+        user_input,
+        deps=deps,
+        message_history= st.session_state.messages[:-1],  # pass entire conversation so far
+    ) as result:
+        # We'll gather partial text to show incrementally
+        partial_text = ""
+        message_placeholder = st.empty()
 
-        st.write("Stream completed.")
-        message_placeholder.markdown(full_response)
-        return full_response, result.new_messages()
-    except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
-        return None, []
+        # Render partial text as it arrives
+        async for chunk in result.stream_text(delta=True):
+            partial_text += chunk
+            message_placeholder.markdown(partial_text)
+
+        # Now that the stream is finished, we have a final result.
+        # Add new messages from this run, excluding user-prompt messages
+        filtered_messages = [msg for msg in result.new_messages() 
+                            if not (hasattr(msg, 'parts') and 
+                                    any(part.part_kind == 'user-prompt' for part in msg.parts))]
+        st.session_state.messages.extend(filtered_messages)
+
+        # Add the final response to the messages
+        st.session_state.messages.append(
+            ModelResponse(parts=[TextPart(content=partial_text)])
+        )
+
 
 async def main():
     st.title("Pydantic AI Agentic RAG")
     st.write("Ask any question about Pydantic AI, the hidden truths of the beauty of this framework lie within.")
 
+    # Initialize chat history in session state if not present
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
+    # Display all messages from the conversation so far
+    # Each message is either a ModelRequest or ModelResponse.
+    # We iterate over their parts to decide how to display them.
     for msg in st.session_state.messages:
         if isinstance(msg, ModelRequest) or isinstance(msg, ModelResponse):
             for part in msg.parts:
                 display_message_part(part)
 
+    # Chat input for the user
     user_input = st.chat_input("What questions do you have about Pydantic AI?")
 
     if user_input:
+        # We append a new request to the conversation explicitly
         st.session_state.messages.append(
             ModelRequest(parts=[UserPromptPart(content=user_input)])
         )
         
+        # Display user prompt in the UI
         with st.chat_message("user"):
             st.markdown(user_input)
 
+        # Display the assistant's partial response while streaming
         with st.chat_message("assistant"):
-            st.write("Generating response...")
-            full_response, new_messages = await run_agent_with_streaming(user_input)
-            if full_response:
-                filtered_messages = [msg for msg in new_messages 
-                                     if not (hasattr(msg, 'parts') and 
-                                             any(part.part_kind == 'user-prompt' for part in msg.parts))]
-                st.session_state.messages.extend(filtered_messages)
-                st.session_state.messages.append(
-                    ModelResponse(parts=[TextPart(content=full_response)])
-                )
-            else:
-                st.error("Failed to generate a response.")
+            # Actually run the agent now, streaming the text
+            await run_agent_with_streaming(user_input)
 
-def display_message_part(part):
-    if part.part_kind == 'system-prompt':
-        with st.chat_message("system"):
-            st.markdown(f"**System**: {part.content}")
-    elif part.part_kind == 'user-prompt':
-        with st.chat_message("user"):
-            st.markdown(part.content)
-    elif part.part_kind == 'text':
-        with st.chat_message("assistant"):
-            st.markdown(part.content)
 
 if __name__ == "__main__":
     asyncio.run(main())
