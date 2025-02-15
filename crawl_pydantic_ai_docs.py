@@ -120,7 +120,7 @@ async def get_embedding(text: str) -> List[float]:
     try:
         
         response = OllamaEmbeddingFunction(
-        model_name="nomic-embed-text",
+        model_name="nomic-embed-text:latest",
         url="http://localhost:11434/api/embeddings"
         )
         embeddings = await asyncio.to_thread(response, text)
