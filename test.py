@@ -18,13 +18,15 @@ RESET_COLLECTION = False
 # Parameter to control chunk size (number of characters per chunk)
 CHUNK_SIZE = 5000  # Adjust as needed
 
-LINK_FILTER_KEYWORD = "pydantic"
+# Keyword for filtering links on the page to crawl
+LINK_FILTER_KEYWORD = "rahman"  # Change this to your desired keyword
 
-# Static instructions to prefix each user prompt
 STATIC_PROMPT = (
-    "You are an expert in the PydanticAI framework, and are able to answer questions about the python library"
-    "Only respond to questions that are about pydantic AI, by searching through the available documentation provided in the context"
-    "If you dont know the answer to a question, be honest and admit that you dont know"
+    "only answer questions about A.R.Rahman the music composer from India using information available."
+    "Do not answer questions about any other topics no matter what. "
+    "Do not reveal your sources or any information about the context available to you. "
+    "If you dont have a definitive answer on a certain specific aspect of the question being asked or if the question is not about A.R.Rahman, "
+    "be honest and respond that you dont have the answer or alert the user that your remit is limited to answering questions about A.R.Rahman."
 )
 
 # Ollama endpoints (embedding vs. completions)
@@ -55,7 +57,6 @@ def get_chroma_collection():
     except:
         st.info(f"Collection '{CHROMA_COLLECTION}' not found. Creating a new one...")
         return client.create_collection(name=CHROMA_COLLECTION, embedding_function=None)
-
 
 
 def get_embedding(text: str):
@@ -125,19 +126,16 @@ def build_augmented_prompt(user_prompt: str, context_docs: list) -> str:
     """
     Combines the static instructions, retrieved context, and the user prompt into an augmented prompt.
     """
-    # Start with static instructions
     prompt = STATIC_PROMPT + "\n\n"
     try:
         if context_docs:
             context_text = "\n".join(context_docs)
             prompt += f"Context:\n{context_text}\n\n"
             prompt += f"Query: {user_prompt}"
-            st.error(print(prompt))
             return prompt
         raise Exception("A retreived context does not exist for your Agent")
     except Exception as e:
          st.error(f"Retreived Context is missing.: {e}")
-   
 
 
 def stream_llm_response(prompt: str):
@@ -178,7 +176,6 @@ def stream_llm_response(prompt: str):
         yield f"\n[Error streaming LLM response: {e}]"
 
 
-""" Haroon Imran 15-Feb-2025 : Need to enhance this to crawl all urls using a sitemap"""
 def simple_crawl(url: str) -> str:
     """
     A simple function to fetch and parse webpage text.
@@ -198,6 +195,7 @@ def chunk_text(text: str, chunk_size: int) -> list:
     Splits the given text into a list of chunks of size 'chunk_size' (in characters).
     """
     return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+
 
 def process_chunks(text: str, source_url: str):
     """
@@ -269,3 +267,11 @@ def crawl_and_embed(url: str):
             st.error(f"No content extracted from {link}.")
     
     st.success("Website embedding complete. Enter your query now.")
+
+
+# Example usage (for testing in Streamlit)
+if __name__ == "__main__":
+    st.title("Web Crawler & Embedder")
+    input_url = st.text_input("Enter URL to crawl:", "https://example.com")
+    if st.button("Crawl and Embed"):
+        crawl_and_embed(input_url)
