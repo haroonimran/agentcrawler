@@ -13,12 +13,11 @@ CHROMA_COLLECTION = "my_collection1"
 EMBEDDING_MODEL = "nomic-embed-text"
 LLM_MODEL = "deepseek-R1:7b"
 
+# Currently the variable RESET_COLLECTION is false by default, and stays so throughout.
 RESET_COLLECTION = False
 
 # Parameter to control chunk size (number of characters per chunk)
 CHUNK_SIZE = 20000  # Adjust as needed
-
-LINK_FILTER_KEYWORD = "pydantic"
 
 # Static instructions to prefix each user prompt
 STATIC_PROMPT = (
@@ -34,6 +33,78 @@ OLLAMA_HOST = "http://localhost:11434/v1/completions"
 OLLAMA_EMBEDDING_ENDPOINT = f"{OLLAMA_HOST_EMBED}/embeddings"
 OLLAMA_LLM_ENDPOINT = f"{OLLAMA_HOST}"
 # -----------------------------------------
+
+# When SLC.1 from streamlitchat.py detects the "Crawl URL" button is pressed:
+def crawl_and_embed(url: str,keyword_for_supplemental_urls: str):
+    """
+    Crawls the specified URL, embeds its content, and then crawls and embeds
+    the content of every link on that page containing the supplemetal links keyword specified by the user on the Streamlit fron end.
+    """
+    st.info(f"Crawling main URL: {url}")
+    
+    # Crawl and embed the main page
+    main_text = simple_crawl(url)
+    if main_text:
+        process_chunks(main_text, url)
+    else:
+        st.error("No content extracted from the main URL.")
+    
+    # Extract links containing the keyword and crawl them
+    filtered_links = get_filtered_links(url, keyword_for_supplemental_urls)
+    # If the user leaves the keyword blank display a messge, and  print the st.success() message.
+    if filtered_links == None:
+        st.info("No keyword provided -- No additional URLs crawled")
+    # If a keyword was provided by the user, crawl and embed the additional URLs.
+    else:    
+        st.info(f"Found {len(filtered_links)} links containing '{keyword_for_supplemental_urls}'.")
+        
+        for link in filtered_links:
+            st.info(f"Crawling filtered link: {link}")
+            link_text = simple_crawl(link)
+            if link_text:
+                process_chunks(link_text, link)
+            else:
+                st.error(f"No content extracted from {link}.")
+    
+    st.success("Website embedding complete. Enter your query now.")
+
+# Crawl and Embed Additional links based on a keyword specified by the user via the front-end.
+def get_filtered_links(url: str, keyword_for_supplemental_urls: str) -> list:
+    """
+    Extracts and returns a list of absolute URLs from the page at 'url'
+    that contain the specified keyword.
+    """
+    try:
+        resp = requests.get(url)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        links = []
+        if keyword_for_supplemental_urls == "":
+            return None
+        else:
+            for a_tag in soup.find_all("a", href=True):
+                link = urljoin(url, a_tag["href"])
+                if keyword_for_supplemental_urls.lower() in link.lower():
+                    links.append(link)
+            return links
+    except Exception as e:
+        st.error(f"Error retrieving links from {url}: {e}")
+        return []
+
+
+""" Haroon Imran 15-Feb-2025 : Need to enhance this to crawl all urls using a sitemap"""
+def simple_crawl(url: str) -> str:
+    """
+    A simple function to fetch and parse webpage text.
+    """
+    try:
+        resp = requests.get(url)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        return soup.get_text(separator="\n", strip=True)
+    except Exception as e:
+        st.error(f"Error crawling {url}: {e}")
+        return ""
 
 
 def get_chroma_collection():
@@ -178,19 +249,7 @@ def stream_llm_response(prompt: str):
         yield f"\n[Error streaming LLM response: {e}]"
 
 
-""" Haroon Imran 15-Feb-2025 : Need to enhance this to crawl all urls using a sitemap"""
-def simple_crawl(url: str) -> str:
-    """
-    A simple function to fetch and parse webpage text.
-    """
-    try:
-        resp = requests.get(url)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        return soup.get_text(separator="\n", strip=True)
-    except Exception as e:
-        st.error(f"Error crawling {url}: {e}")
-        return ""
+
 
 
 def chunk_text(text: str, chunk_size: int) -> list:
@@ -222,50 +281,6 @@ def process_chunks(text: str, source_url: str):
         )
 
 
-def get_filtered_links(url: str, keyword: str) -> list:
-    """
-    Extracts and returns a list of absolute URLs from the page at 'url'
-    that contain the specified keyword.
-    """
-    try:
-        resp = requests.get(url)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        links = []
-        for a_tag in soup.find_all("a", href=True):
-            link = urljoin(url, a_tag["href"])
-            if keyword.lower() in link.lower():
-                links.append(link)
-        return links
-    except Exception as e:
-        st.error(f"Error retrieving links from {url}: {e}")
-        return []
 
 
-def crawl_and_embed(url: str):
-    """
-    Crawls the specified URL, embeds its content, and then crawls and embeds
-    the content of every link on that page containing the LINK_FILTER_KEYWORD.
-    """
-    st.info(f"Crawling main URL: {url}")
-    
-    # Crawl and embed the main page
-    main_text = simple_crawl(url)
-    if main_text:
-        process_chunks(main_text, url)
-    else:
-        st.error("No content extracted from the main URL.")
-    
-    # Extract links containing the keyword and crawl them
-    filtered_links = get_filtered_links(url, LINK_FILTER_KEYWORD)
-    st.info(f"Found {len(filtered_links)} links containing '{LINK_FILTER_KEYWORD}'.")
-    
-    for link in filtered_links:
-        st.info(f"Crawling filtered link: {link}")
-        link_text = simple_crawl(link)
-        if link_text:
-            process_chunks(link_text, link)
-        else:
-            st.error(f"No content extracted from {link}.")
-    
-    st.success("Website embedding complete. Enter your query now.")
+

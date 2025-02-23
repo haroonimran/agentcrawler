@@ -6,11 +6,15 @@ from ragmain import crawl_and_embed,add_embedding_to_db,build_augmented_prompt,s
 def main():
     st.title("Local LLM Chat with RAG (Chunked Data & Human-Readable Streaming)")
 
-    # Sidebar: Web Crawler
+    # SLC.1 Sidebar: Web Crawler
     st.sidebar.header("Web Crawler")
     crawl_url = st.sidebar.text_input("Enter URL to crawl:")
-    if st.sidebar.button("Crawl URL") and crawl_url:
-        crawl_and_embed(crawl_url)
+    keyword = st.sidebar.text_input("Enter keyword filter for additinal URLs")
+    if st.sidebar.button("Crawl URL"):
+        if crawl_url:
+            crawl_and_embed(crawl_url,keyword)
+        else:
+            st.sidebar.error("Error! URL to be Crawled not entered! Enter URL and try again.")
 
     # Main: Chat Interface
     st.header("Ask the LLM (RAG)")
