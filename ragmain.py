@@ -16,14 +16,14 @@ LLM_MODEL = "deepseek-R1:7b"
 RESET_COLLECTION = False
 
 # Parameter to control chunk size (number of characters per chunk)
-CHUNK_SIZE = 5000  # Adjust as needed
+CHUNK_SIZE = 20000  # Adjust as needed
 
 LINK_FILTER_KEYWORD = "pydantic"
 
 # Static instructions to prefix each user prompt
 STATIC_PROMPT = (
-    "You are an expert in the PydanticAI framework, and are able to answer questions about the python library"
-    "Only respond to questions that are about pydantic AI, by searching through the available documentation provided in the context"
+    "You are an expert in the life and work of noted music composer A.R.Rahman"
+    "Only respond to questions that are about A.R.Rahman by searching through the available wikipedia and other articles provided in the context"
     "If you dont know the answer to a question, be honest and admit that you dont know"
 )
 
