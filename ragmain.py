@@ -5,25 +5,28 @@ import json
 import streamlit as st
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+from get_ollama_models import model_selection
+
 
 # ------------- Configuration -------------
 PERSISTENT_DB_PATH = "./chroma_data"  # Adjust as needed
 CHROMA_COLLECTION = "my_collection1"
 
 EMBEDDING_MODEL = "nomic-embed-text"
-LLM_MODEL = "deepseek-R1:7b"
+LLM_MODEL = model_selection()
 
 # Currently the variable RESET_COLLECTION is false by default, and stays so throughout.
 RESET_COLLECTION = False
 
 # Parameter to control chunk size (number of characters per chunk)
-CHUNK_SIZE = 20000  # Adjust as needed
+CHUNK_SIZE = 2000  # Adjust as needed
 
 # Static instructions to prefix each user prompt
 STATIC_PROMPT = (
-    "You are an expert in the life and work of noted music composer A.R.Rahman"
-    "Only respond to questions that are about A.R.Rahman by searching through the available wikipedia and other articles provided in the context"
-    "If you dont know the answer to a question, be honest and admit that you dont know"
+    "Background: You are an expert reviewing available documents and answering questions about A.R.Rahman."
+   # "Only respond to questions that are about Pydantic by searching through the documents provided to you in the context."
+    #"If you dont know the answer to a question, be honest and admit that you dont know." 
+    #"Do not attempt to answer questions when you are unable to derive a clear contextual understanding based on the user prompt and documents."
 )
 
 # Ollama endpoints (embedding vs. completions)
@@ -33,6 +36,10 @@ OLLAMA_HOST = "http://localhost:11434/v1/completions"
 OLLAMA_EMBEDDING_ENDPOINT = f"{OLLAMA_HOST_EMBED}/embeddings"
 OLLAMA_LLM_ENDPOINT = f"{OLLAMA_HOST}"
 # -----------------------------------------
+
+
+
+
 
 # When SLC.1 from streamlitchat.py detects the "Crawl URL" button is pressed:
 def crawl_and_embed(url: str,keyword_for_supplemental_urls: str):
@@ -172,7 +179,7 @@ def add_embedding_to_db(document: str, embedding, source: str = "user", extra_me
         st.error(f"Error adding document to the database: {e}")
 
 
-def retrieve_context(embedding, n_results=30):
+def retrieve_context(embedding, n_results=5):
     """
     Performs a similarity search in ChromaDB using the query embedding.
     Returns the top matching documents.
@@ -203,7 +210,9 @@ def build_augmented_prompt(user_prompt: str, context_docs: list) -> str:
             context_text = "\n".join(context_docs)
             prompt += f"Context:\n{context_text}\n\n"
             prompt += f"Query: {user_prompt}"
-            st.error(print(prompt))
+        
+            with st.container(border=True,height=200):
+                st.success(prompt)
             return prompt
         raise Exception("A retreived context does not exist for your Agent")
     except Exception as e:

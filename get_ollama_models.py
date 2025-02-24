@@ -1,4 +1,5 @@
 import subprocess
+import streamlit as st
 
 def get_available_ollama_models():
     try:
@@ -22,9 +23,10 @@ def get_available_ollama_models():
         print(f"Error retrieving models: {e}")
         return []
 
-# Example usage:
-if __name__ == "__main__":
-    models = get_available_ollama_models()
-    print("Available Ollama Models:")
-    for model in models:
-        print("-", model)
+import streamlit as st
+
+
+def model_selection():
+    LLM_MODEL = st.sidebar.selectbox("Select Model", get_available_ollama_models())
+    st.sidebar.write(f"Selected Model: {LLM_MODEL}")
+    return LLM_MODEL

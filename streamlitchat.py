@@ -16,6 +16,7 @@ def main():
         else:
             st.sidebar.error("Error! URL to be Crawled not entered! Enter URL and try again.")
 
+
     # Main: Chat Interface
     st.header("Ask the LLM (RAG)")
     prompt = st.text_input("Enter your query or prompt:")
@@ -31,12 +32,16 @@ def main():
         if context_docs:
             st.markdown("#### Retrieved Context:")
             for idx, doc in enumerate(context_docs, 1):
-                st.markdown(f"**Doc {idx}:** {doc}")
+                with st.container(border=True,height=200):
+                    st.text(f"**Doc {idx}:** {doc}")
         else:
             st.warning("No similar context found.")
 
         # Build augmented prompt with static instructions
         augmented_prompt = build_augmented_prompt(prompt, context_docs)
+        with st.container(border=True,height=200):
+            st.text(augmented_prompt)
+        
         st.markdown("### LLM Response:")
         response_placeholder = st.empty()
         full_response = ""
@@ -48,6 +53,7 @@ def main():
 
         st.success("Response complete.")
 
+    
 
 if __name__ == "__main__":
     main()
