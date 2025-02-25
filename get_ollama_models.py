@@ -23,7 +23,6 @@ def get_available_ollama_models():
         print(f"Error retrieving models: {e}")
         return []
 
-import streamlit as st
 
 
 def model_selection():

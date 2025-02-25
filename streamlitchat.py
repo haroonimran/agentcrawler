@@ -1,6 +1,8 @@
 import streamlit as st
 import time
-from ragmain import crawl_and_embed,add_embedding_to_db,build_augmented_prompt,stream_llm_response,retrieve_context,get_embedding
+from ragmain import crawl_and_embed,build_augmented_prompt,stream_llm_response,retrieve_context
+from insertdata import add_embedding_to_db
+from embed import get_embedding
 
 
 def main():

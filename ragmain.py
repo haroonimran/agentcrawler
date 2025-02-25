@@ -1,25 +1,16 @@
-import requests
-import chromadb
-import uuid
 import json
+import requests
 import streamlit as st
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+
+# imports for user defined functions
 from get_ollama_models import model_selection
+from insertdata import get_chroma_collection
+from chunker import process_chunks
 
 
-# ------------- Configuration -------------
-PERSISTENT_DB_PATH = "./chroma_data"  # Adjust as needed
-CHROMA_COLLECTION = "my_collection1"
-
-EMBEDDING_MODEL = "nomic-embed-text"
 LLM_MODEL = model_selection()
-
-# Currently the variable RESET_COLLECTION is false by default, and stays so throughout.
-RESET_COLLECTION = False
-
-# Parameter to control chunk size (number of characters per chunk)
-CHUNK_SIZE = 2000  # Adjust as needed
 
 # Static instructions to prefix each user prompt
 STATIC_PROMPT = (
@@ -28,17 +19,10 @@ STATIC_PROMPT = (
     #"If you dont know the answer to a question, be honest and admit that you dont know." 
     #"Do not attempt to answer questions when you are unable to derive a clear contextual understanding based on the user prompt and documents."
 )
-
 # Ollama endpoints (embedding vs. completions)
-OLLAMA_HOST_EMBED = "http://localhost:11434/api"
 OLLAMA_HOST = "http://localhost:11434/v1/completions"
-
-OLLAMA_EMBEDDING_ENDPOINT = f"{OLLAMA_HOST_EMBED}/embeddings"
 OLLAMA_LLM_ENDPOINT = f"{OLLAMA_HOST}"
 # -----------------------------------------
-
-
-
 
 
 # When SLC.1 from streamlitchat.py detects the "Crawl URL" button is pressed:
@@ -74,6 +58,8 @@ def crawl_and_embed(url: str,keyword_for_supplemental_urls: str):
                 st.error(f"No content extracted from {link}.")
     
     st.success("Website embedding complete. Enter your query now.")
+
+
 
 # Crawl and Embed Additional links based on a keyword specified by the user via the front-end.
 def get_filtered_links(url: str, keyword_for_supplemental_urls: str) -> list:
@@ -112,72 +98,6 @@ def simple_crawl(url: str) -> str:
     except Exception as e:
         st.error(f"Error crawling {url}: {e}")
         return ""
-
-
-def get_chroma_collection():
-    """
-    Returns a persistent ChromaDB collection. 
-    No dimension checks or auto-deletion unless RESET_COLLECTION is True.
-    """
-    client = chromadb.PersistentClient(path=PERSISTENT_DB_PATH)
-    if RESET_COLLECTION:
-        try:
-            client.delete_collection(CHROMA_COLLECTION)
-            st.info(f"Collection '{CHROMA_COLLECTION}' reset (forced deletion).")
-        except Exception:
-            st.info(f"Collection '{CHROMA_COLLECTION}' reset (forced deletion) Failed due to exception.")
-        return client.create_collection(name=CHROMA_COLLECTION, embedding_function=None)
-
-    try:
-        return client.get_collection(CHROMA_COLLECTION)
-    except:
-        st.info(f"Collection '{CHROMA_COLLECTION}' not found. Creating a new one...")
-        return client.create_collection(name=CHROMA_COLLECTION, embedding_function=None)
-
-
-
-def get_embedding(text: str):
-    """
-    Calls the Ollama embedding endpoint to get an embedding vector for the text.
-    """
-    payload = {"model": EMBEDDING_MODEL, "prompt": text}
-    try:
-        response = requests.post(url=OLLAMA_EMBEDDING_ENDPOINT, json=payload)
-        response.raise_for_status()
-        data = response.json()
-        embedding = data.get("embedding")
-        if embedding is None:
-            st.error("Embedding model did not return an embedding.")
-            return None
-        return embedding
-    except Exception as e:
-        st.error(f"Error obtaining embedding: {e}")
-        return None
-
-
-def add_embedding_to_db(document: str, embedding, source: str = "user", extra_metadata: dict = None):
-    """
-    Adds a document + embedding to the ChromaDB collection with optional metadata.
-    """
-    try:
-        collection = get_chroma_collection()
-        doc_id = str(uuid.uuid4())
-        metadata = {"source": source}
-        if extra_metadata:
-            metadata.update(extra_metadata)
-
-        collection.add(
-            documents=[document],
-            embeddings=[embedding],
-            metadatas=[metadata],
-            ids=[doc_id]
-        )
-        # For user prompts, we show an immediate success message.
-        if source == "user":
-            st.success("User prompt added to the database.")
-    except Exception as e:
-        st.error(f"Error adding document to the database: {e}")
-
 
 def retrieve_context(embedding, n_results=5):
     """
@@ -256,40 +176,3 @@ def stream_llm_response(prompt: str):
                     continue
     except Exception as e:
         yield f"\n[Error streaming LLM response: {e}]"
-
-
-
-
-
-def chunk_text(text: str, chunk_size: int) -> list:
-    """
-    Splits the given text into a list of chunks of size 'chunk_size' (in characters).
-    """
-    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
-
-def process_chunks(text: str, source_url: str):
-    """
-    Splits the text into chunks, obtains an embedding for each chunk,
-    and adds them to the ChromaDB collection with metadata.
-    """
-    chunks = chunk_text(text, CHUNK_SIZE)
-    if not chunks:
-        st.error(f"Failed to split content from {source_url} into chunks.")
-        return
-
-    for idx, chunk in enumerate(chunks):
-        embedding = get_embedding(chunk)
-        if not embedding:
-            st.error(f"Failed to obtain embedding for chunk {idx+1} from {source_url}.")
-            continue
-        add_embedding_to_db(
-            chunk,
-            embedding,
-            source="crawl",
-            extra_metadata={"url": source_url, "chunk_index": idx+1, "total_chunks": len(chunks)}
-        )
-
-
-
-
-
