@@ -1,8 +1,15 @@
+# Library Imports
 import streamlit as st
 import time
+
+# Imports for user defined functions
 from ragmain import crawl_and_embed,build_augmented_prompt,stream_llm_response,retrieve_context
 from insertdata import add_embedding_to_db
 from embed import get_embedding
+
+# Haroon Imran 24-Feb-2025:
+# streamlit.py is where it all starts. Execute this file in the terminal to run the application.
+# command:  >>            streamlit run /home/imran/llmbox/agentcrawler/streamlitchat.py
 
 
 def main():
